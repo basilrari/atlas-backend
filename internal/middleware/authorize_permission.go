@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"troo-backend/internal/constants"
+	"troo-backend/internal/pkg/constants"
 	"troo-backend/internal/pkg/response"
 
 	"github.com/gofiber/fiber/v2"

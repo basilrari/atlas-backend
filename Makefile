@@ -1,15 +1,16 @@
-# Local dev only (no Docker). Requires Postgres and Redis available (e.g. Supabase + local Redis).
-.PHONY: run build test deps
-
-run:
-	go run ./api
+.PHONY: build test run tidy
 
 build:
-	go build -o api ./api
+	go build ./...
 
 test:
-	go test ./...
+	go test ./... -v
 
-deps:
-	go mod download
+run:
+	go run cmd/api/main.go
+
+tidy:
 	go mod tidy
+
+lint:
+	golangci-lint run ./...
