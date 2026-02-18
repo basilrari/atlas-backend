@@ -1,0 +1,27 @@
+# Binaries
+api
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+coverage.out
+
+# Env (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+vendor/
+
+# Vercel
+.vercel

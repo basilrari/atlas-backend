@@ -1,0 +1,901 @@
+openapi: 3.1.0
+info:
+  title: Troo Earth API
+  description: Backend API for Troo Earth (Express source of truth; Go must match 100%)
+  version: 1.0.0
+servers:
+  - url: /
+    description: Base path
+security:
+  - cookieAuth: []
+  - devPassword: []
+paths:
+  # ---------- Health (no auth) ----------
+  /:
+    get:
+      summary: Health dashboard (HTML)
+      operationId: healthDashboard
+      security: []
+      responses:
+        '200':
+          description: HTML health status page
+          content:
+            text/html: {}
+  /reset:
+    get:
+      summary: Reset health stats (admin)
+      operationId: healthReset
+      security: []
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stats reset
+          content:
+            application/json:
+              schema: { type: object, properties: { success: { type: boolean }, message: { type: string } } }
+        '403':
+          description: Unauthorized
+  /health/json:
+    get:
+      summary: Health JSON
+      operationId: healthJson
+      security: []
+      responses:
+        '200':
+          description: Health payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service: { type: string }
+                  status: { type: string, enum: [ok, issue] }
+                  runtime: { type: object }
+                  traffic: { type: object }
+                  dependencies: { type: object }
+  /health/errors:
+    get:
+      summary: Last 50 internal errors
+      operationId: healthErrors
+      security: []
+      responses:
+        '200':
+          description: Array of error objects
+          content:
+            application/json:
+              schema: { type: array, items: { type: object } }
+        '500':
+          description: Server error
+
+  # ---------- Stripe webhook (raw body, no JSON) ----------
+  /api/v1/stripe/webhook:
+    post:
+      summary: Stripe webhook
+      operationId: stripeWebhook
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: string, description: "Raw body for signature verification" }
+      parameters:
+        - name: stripe-signature
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: ok
+          content:
+            text/plain: { schema: { type: string, example: ok } }
+        '400':
+          description: Webhook Error message
+
+  # ---------- Auth (session via cookie) ----------
+  /api/v1/auth/login:
+    post:
+      summary: Login
+      operationId: authLogin
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login success
+          headers:
+            Set-Cookie:
+              description: troo.sid session cookie
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/SessionUser' }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/v1/auth/me:
+    get:
+      summary: Verify session / current user
+      operationId: authMe
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  data: { type: object, properties: { user: { $ref: '#/components/schemas/SessionUser' } } }
+        '401':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /api/v1/auth/logout:
+    delete:
+      summary: Logout
+      operationId: authLogout
+      responses:
+        '200':
+          description: Logged out
+          headers:
+            Set-Cookie:
+              description: Clear troo.sid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  data: {}
+
+  # ---------- Users (auth required) ----------
+  /api/v1/users/create-user:
+    post:
+      summary: Create user (and log in as that user)
+      operationId: usersCreateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_name, email, password, fullname]
+              properties:
+                user_name: { type: string }
+                email: { type: string }
+                password: { type: string }
+                fullname: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  data: { type: object, properties: { user: { $ref: '#/components/schemas/UserSafe' } } }
+        '400': { description: Validation error }
+        '409': { description: Email or username already registered }
+  /api/v1/users/update-user/{id}:
+    put:
+      summary: Update user
+      operationId: usersUpdateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullname: { type: string }
+                email: { type: string }
+                password: { type: string }
+                org_id: { type: string, format: uuid }
+      responses:
+        '200': { description: User updated }
+        '400': { description: Invalid input }
+        '404': { description: User not found }
+  /api/v1/users/view-user/{id}:
+    get:
+      summary: View user by ID
+      operationId: usersViewUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: User found }
+        '400': { description: Missing user ID }
+        '404': { description: User not found }
+  /api/v1/users/update-role:
+    patch:
+      summary: Update user role (ASSIGN_ROLE)
+      operationId: usersUpdateRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, role]
+              properties:
+                user_id: { type: string, format: uuid }
+                role: { type: string, enum: [superadmin, admin, manager, viewer] }
+      responses:
+        '200': { description: Role updated }
+        '400': { description: Validation or business error }
+  /api/v1/users/remove-user:
+    delete:
+      summary: Remove user from org (REMOVE_USER)
+      operationId: usersRemoveUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+      responses:
+        '200': { description: User removed }
+        '400': { description: Validation error }
+
+  # ---------- Public invitations (no auth) ----------
+  /api/v1/invitations/public/check-token:
+    post:
+      summary: Check invitation token (public)
+      operationId: invitationsPublicCheckToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200': { description: Token verified }
+        '400': { description: token required or invalid }
+
+  # ---------- Orgs ----------
+  /api/v1/orgs/create-org:
+    post:
+      summary: Create organization
+      operationId: orgsCreateOrg
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org_name, country_code]
+              properties:
+                org_name: { type: string }
+                country_code: { type: string, maxLength: 2 }
+                registration_id: { type: string }
+                logo_url: { type: string }
+                incorporation_doc_url: { type: string }
+      responses:
+        '200': { description: Organization created; session updated }
+        '400': { description: Missing required fields }
+  /api/v1/orgs/view-org:
+    get:
+      summary: Get current user's organization (with employees)
+      operationId: orgsViewOrg
+      responses:
+        '200': { description: Org with employees }
+        '403': { description: User not associated with org }
+        '404': { description: Org not found }
+  /api/v1/orgs/update-org/{id}:
+    patch:
+      summary: Update organization
+      operationId: orgsUpdateOrg
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                org_name: { type: string }
+                country_code: { type: string }
+                registration_id: { type: string }
+                logo_url: { type: string }
+                incorporation_doc_url: { type: string }
+      responses:
+        '200': { description: Organization updated }
+        '400': { description: No valid fields }
+        '404': { description: Org not found }
+
+  # ---------- Uploads ----------
+  /api/v1/uploads/org-logo:
+    post:
+      summary: Get signed upload URL for org logo
+      operationId: uploadsOrgLogo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name]
+              properties:
+                file_name: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      uploadUrl: { type: string }
+                      publicUrl: { type: string }
+                      path: { type: string }
+        '400': { description: file_name required }
+  /api/v1/uploads/org-doc:
+    post:
+      summary: Get signed upload URL for org doc
+      operationId: uploadsOrgDoc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name]
+              properties:
+                file_name: { type: string }
+      responses:
+        '200': { description: Upload URL generated }
+        '400': { description: file_name required }
+
+  # ---------- Marketplace ----------
+  /api/v1/marketplace/projects:
+    get:
+      summary: Get all ICR projects
+      operationId: marketplaceGetAllProjects
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      projects: { type: array }
+                      total: { type: integer }
+  /api/v1/marketplace/projects/{id}:
+    get:
+      summary: Get project by ID
+      operationId: marketplaceGetProjectById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { type: object }
+  /api/v1/marketplace/admin-sync:
+    post:
+      summary: Sync ICR projects (admin)
+      operationId: marketplaceAdminSync
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  count: { type: integer }
+                  message: { type: string }
+
+  # ---------- Invitations ----------
+  /api/v1/invitations/create-invite:
+    post:
+      summary: Send invite (INVITE_USER)
+      operationId: invitationsCreateInvite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string }
+                role: { type: string, enum: [superadmin, admin, manager, viewer] }
+      responses:
+        '200': { description: Invitation sent }
+        '400': { description: Email and role required }
+  /api/v1/invitations/accept-invite:
+    post:
+      summary: Accept invitation
+      operationId: invitationsAcceptInvite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '200': { description: Invitation accepted; session updated }
+        '400': { description: Token required }
+  /api/v1/invitations/revoke-invite:
+    patch:
+      summary: Revoke invitation (INVITE_USER)
+      operationId: invitationsRevokeInvite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        '200': { description: Invitation revoked }
+        '400': { description: Email required }
+  /api/v1/invitations/view-invites:
+    get:
+      summary: List org invitations (VIEW_DATA)
+      operationId: invitationsViewInvites
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { description: Invitations list }
+        '400': { description: Error }
+  /api/v1/invitations/resend-invite:
+    post:
+      summary: Resend invitation (INVITE_USER)
+      operationId: invitationsResendInvite
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string }
+      responses:
+        '200': { description: Invitation resent }
+        '400': { description: Email required }
+
+  # ---------- Listings ----------
+  /api/v1/listings/create-listing:
+    post:
+      summary: Create listing
+      operationId: listingsCreateListing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - project_id
+                - credits_available
+                - price_per_credit
+                - project_name
+                - project_start_year
+                - registry
+                - category
+                - location_city
+                - location_state
+                - location_country
+                - thumbnail_url
+                - methodology
+              properties:
+                project_id: { type: string, format: uuid }
+                credits_available: { type: number }
+                price_per_credit: { type: number }
+                project_name: { type: string }
+                project_start_year: { type: integer }
+                registry: { type: string }
+                category: { type: string }
+                location_city: { type: string }
+                location_state: { type: string }
+                location_country: { type: string }
+                thumbnail_url: { type: string }
+                methodology: { type: string }
+                sdg_numbers: { type: array }
+                vintage_year: { type: integer }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: object }
+        '400': { description: Missing required field }
+        '500': { description: Failed to create listing }
+  /api/v1/listings/get-all-listings:
+    get:
+      summary: Get all listings
+      operationId: listingsGetAllListings
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: array }
+  /api/v1/listings/get-org-listings:
+    get:
+      summary: Get org listings
+      operationId: listingsGetOrgListings
+      responses:
+        '200': { description: Organization listings }
+        '403': { description: User not associated with org }
+  /api/v1/listings/get-listing/{listing_id}:
+    get:
+      summary: Get listing by ID
+      operationId: listingsGetListingById
+      parameters:
+        - name: listing_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Listing }
+        '400': { description: Invalid listing_id }
+        '404': { description: Listing not found }
+  /api/v1/listings/get-all-active-listings:
+    get:
+      summary: Get all active listings
+      operationId: listingsGetAllActiveListings
+      responses:
+        '200': { description: Active listings }
+  /api/v1/listings/get-all-closed-listings:
+    get:
+      summary: Get all closed listings
+      operationId: listingsGetAllClosedListings
+      responses:
+        '200': { description: Closed listings }
+  /api/v1/listings/get-org-active-listings:
+    get:
+      summary: Get org active listings
+      operationId: listingsGetOrgActiveListings
+      responses:
+        '200': { description: Org active listings }
+        '403': { description: User not linked to org }
+  /api/v1/listings/get-org-closed-listings:
+    get:
+      summary: Get org closed listings
+      operationId: listingsGetOrgClosedListings
+      responses:
+        '200': { description: Org closed listings }
+        '403': { description: User not linked to org }
+  /api/v1/listings/edit-listing:
+    put:
+      summary: Edit listing
+      operationId: listingsEditListing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listing_id, price, quantity]
+              properties:
+                listing_id: { type: string, format: uuid }
+                price: { type: number }
+                quantity: { type: number }
+      responses:
+        '200': { description: Listing updated }
+        '400': { description: Validation error }
+        '403': { description: Unauthorized }
+        '404': { description: Listing or holdings not found }
+  /api/v1/listings/cancel-listing:
+    post:
+      summary: Cancel listing
+      operationId: listingsCancelListing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listing_id]
+              properties:
+                listing_id: { type: string, format: uuid }
+      responses:
+        '200': { description: Listing cancelled }
+        '400': { description: Invalid listing_id }
+        '403': { description: Unauthorized or registry listing }
+        '404': { description: Listing or holdings not found }
+
+  # ---------- Holdings ----------
+  /api/v1/holdings/view-holdings:
+    get:
+      summary: View org holdings
+      operationId: holdingsViewHoldings
+      responses:
+        '200': { description: Holdings }
+        '400': { description: Invalid org ID }
+  /api/v1/holdings/view-project:
+    post:
+      summary: Get project by holding ID
+      operationId: holdingsViewProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [holding_id]
+              properties:
+                holding_id: { type: string, format: uuid }
+      responses:
+        '200': { description: Project }
+        '400': { description: Invalid holding_id }
+
+  # ---------- Trading ----------
+  /api/v1/trading/buy-credits:
+    post:
+      summary: Create Stripe PaymentIntent for buying credits (BUY_CREDITS)
+      operationId: tradingBuyCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listing_id, amount]
+              properties:
+                listing_id: { type: string, format: uuid }
+                amount: { type: number }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      payment_intent_id: { type: string }
+                      client_secret: { type: string }
+        '400': { description: Missing/invalid fields }
+        '403': { description: Forbidden }
+        '404': { description: Listing not found }
+        '409': { description: Listing not open / insufficient credits }
+  /api/v1/trading/sell-credits:
+    post:
+      summary: Sell credits / create listing (SELL_CREDITS)
+      operationId: tradingSellCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [project_id, amount, price]
+              properties:
+                project_id: { type: string, format: uuid }
+                amount: { type: number }
+                price: { type: number }
+      responses:
+        '200': { description: Listing created/updated }
+        '400': { description: Invalid amount/price or insufficient credits }
+        '403': { description: User not associated with org }
+        '404': { description: Org or holdings not found }
+  /api/v1/trading/retire-credits:
+    post:
+      summary: Retire credits (RETIRE_CREDITS)
+      operationId: tradingRetireCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org_id, project_id, amount]
+              properties:
+                org_id: { type: string, format: uuid }
+                project_id: { type: string, format: uuid }
+                amount: { type: number }
+                purpose: { type: string }
+                beneficiary: { type: string }
+      responses:
+        '200': { description: Credits retired }
+        '400': { description: Validation error }
+  /api/v1/trading/transfer-credits:
+    post:
+      summary: Transfer credits to another org (TRANSFER_CREDITS)
+      operationId: tradingTransferCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to_org_code, project_id, amount]
+              properties:
+                to_org_code: { type: string }
+                project_id: { type: string, format: uuid }
+                amount: { type: number }
+      responses:
+        '200': { description: Transfer successful }
+        '400': { description: Same org / insufficient credits }
+        '403': { description: User not associated with org }
+        '404': { description: Target org or holdings not found }
+
+  # ---------- Transactions ----------
+  /api/v1/transactions/get-transactions:
+    get:
+      summary: View org transactions
+      operationId: transactionsGetTransactions
+      responses:
+        '200': { description: Transactions }
+        '403': { description: No org }
+
+  # ---------- Retirements ----------
+  /api/v1/retirements/view-org:
+    get:
+      summary: View org retirements
+      operationId: retirementsViewOrg
+      responses:
+        '200': { description: Retirements }
+        '403': { description: No org }
+  /api/v1/retirements/view-one:
+    post:
+      summary: View one retirement certificate
+      operationId: retirementsViewOne
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [certificate_id]
+              properties:
+                certificate_id: { type: string, format: uuid }
+      responses:
+        '200': { description: Certificate }
+        '400': { description: certificate_id required or invalid }
+        '404': { description: Not found }
+
+  # ---------- Listing events ----------
+  /api/v1/listing-events/get-org-listing-events:
+    get:
+      summary: Get org listing events (audit trail)
+      operationId: listingEventsGetOrgListingEvents
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      events: { type: array }
+        '401': { description: User not associated with org }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: troo.sid
+    devPassword:
+      type: apiKey
+      in: header
+      name: dev-password
+  schemas:
+    SessionUser:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        fullname: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [superadmin, admin, manager, viewer] }
+        org_id: { type: string, format: uuid, nullable: true }
+    UserSafe:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        fullname: { type: string }
+        user_name: { type: string }
+        email: { type: string }
+        org_id: { type: string, format: uuid, nullable: true }
+        role: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SuccessResponse:
+      type: object
+      properties:
+        status: { type: string, example: success }
+        message: { type: string }
+        data: {}
+        metadata: { type: object }
+    ErrorResponse:
+      type: object
+      properties:
+        status: { type: string, example: error }
+        error:
+          type: object
+          properties:
+            message: { type: string }
+            statusCode: { type: integer }
+            details: { type: object }
+    AuthErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: Unauthorized }
