@@ -2,7 +2,6 @@ package main
 
 import (
 	"net/http"
-	"os"
 
 	"troo-backend/internal/config"
 	"troo-backend/internal/interfaces/router"
@@ -29,10 +28,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	port := "8888"
 	if err := fiberApp.Listen(":" + port); err != nil {
 		panic(err)
 	}

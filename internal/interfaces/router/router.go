@@ -39,6 +39,21 @@ import (
 	"gorm.io/gorm"
 )
 
+type gormDBPinger struct {
+	db *gorm.DB
+}
+
+func (g *gormDBPinger) Ping() error {
+	if g == nil || g.db == nil {
+		return nil
+	}
+	sqlDB, err := g.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Ping()
+}
+
 func CreateApp(cfg *config.Config) (*fiber.App, error) {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage:   true,
@@ -96,6 +111,7 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 		if errDB != nil {
 			return nil, errDB
 		}
+		hh.DB = &gormDBPinger{db: db}
 	}
 
 	sessionCfg := middleware.SessionConfig{
