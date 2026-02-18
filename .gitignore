@@ -1,5 +1,5 @@
 # Binaries
-api
+/app
 *.exe
 *.dll
 *.so
@@ -22,6 +22,3 @@ coverage.out
 
 # Go
 vendor/
-
-# Vercel
-.vercel
