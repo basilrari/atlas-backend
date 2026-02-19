@@ -21,34 +21,43 @@ func CORS(cfg CORSConfig) fiber.Handler {
 		if origin == "" {
 			return c.Next()
 		}
-		// Preflight from localhost in dev
+
+		allowed := false
 		if c.Method() == fiber.MethodOptions && (strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:")) {
-			setCORSHeaders(c, origin)
+			allowed = true
+		}
+		if !allowed && cfg.AllowedSuffix != "" && strings.HasSuffix(strings.ToLower(origin), strings.ToLower(cfg.AllowedSuffix)) {
+			allowed = true
+		}
+		if !allowed && cfg.DevPassword != "" && c.Get("dev-password") == cfg.DevPassword {
+			allowed = true
+		}
+
+		if !allowed {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"status": "error",
+				"error": fiber.Map{
+					"message":    "Not allowed by CORS",
+					"statusCode": 403,
+					"details":    fiber.Map{},
+				},
+			})
+		}
+
+		setCORSHeaders(c, origin)
+
+		// Preflight (OPTIONS) must get 2xx and no body so the browser allows the actual request.
+		if c.Method() == fiber.MethodOptions {
 			return c.SendStatus(fiber.StatusNoContent)
 		}
-		// Suffix match (e.g. .troo.earth)
-		if cfg.AllowedSuffix != "" && strings.HasSuffix(strings.ToLower(origin), strings.ToLower(cfg.AllowedSuffix)) {
-			setCORSHeaders(c, origin)
-			return c.Next()
-		}
-		// Dev password header
-		if cfg.DevPassword != "" && c.Get("dev-password") == cfg.DevPassword {
-			setCORSHeaders(c, origin)
-			return c.Next()
-		}
-		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-			"status": "error",
-			"error": fiber.Map{
-				"message":    "Not allowed by CORS",
-				"statusCode": 403,
-				"details":    fiber.Map{},
-			},
-		})
+		return c.Next()
 	}
 }
 
 func setCORSHeaders(c *fiber.Ctx, origin string) {
 	c.Set("Access-Control-Allow-Origin", origin)
 	c.Set("Access-Control-Allow-Credentials", "true")
-	c.Set("Access-Control-Allow-Headers", "Content-Type, dev-password")
+	c.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, X-Requested-With, dev-password")
+	c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+	c.Set("Access-Control-Max-Age", "86400")
 }
