@@ -22,3 +22,9 @@ coverage.out
 
 # Go
 vendor/
+
+# Air (hot reload)
+.air.toml
+
+# Build / temp
+tmp/
