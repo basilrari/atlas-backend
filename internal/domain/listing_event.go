@@ -14,8 +14,7 @@ type ListingEvent struct {
 	EventType    string         `gorm:"column:event_type;type:varchar(30);not null" json:"event_type"`
 	EventData    datatypes.JSON `gorm:"column:event_data;type:jsonb;not null" json:"event_data"`
 	ActorOrgCode *string        `gorm:"column:actor_org_code" json:"actor_org_code"`
-	CreatedAt    time.Time      `json:"createdAt"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt    time.Time      `gorm:"column:createdAt" json:"createdAt"`
 }
 
 func (ListingEvent) TableName() string {

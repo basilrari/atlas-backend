@@ -17,9 +17,8 @@ type Invitation struct {
 	Status      string         `gorm:"column:status;not null;default:'pending'" json:"status"`
 	CreatedBy   string         `gorm:"column:created_by;not null" json:"created_by"`
 	ExpiresAt   time.Time      `gorm:"column:expires_at;not null" json:"expires_at"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt time.Time `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 func (Invitation) TableName() string {

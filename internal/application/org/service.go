@@ -109,9 +109,9 @@ func (s *Service) GetOrgByID(ctx context.Context, orgID uuid.UUID) (map[string]i
 	}
 	if err := s.DB.WithContext(ctx).
 		Model(&domain.User{}).
-		Select("user_id, fullname, email, user_name, role, created_at").
+		Select(`user_id, fullname, email, user_name, role, "createdAt"`).
 		Where("org_id = ?", orgID).
-		Order("created_at ASC").
+		Order(`"createdAt" ASC`).
 		Scan(&employees).Error; err != nil {
 		return nil, err
 	}

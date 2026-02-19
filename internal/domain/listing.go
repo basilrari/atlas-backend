@@ -27,11 +27,18 @@ type Listing struct {
 	SdgNumbers       string         `gorm:"column:sdg_numbers;type:json" json:"sdg_numbers"`
 	Methodology      string         `gorm:"column:methodology;not null" json:"methodology"`
 	VintageYear      int            `gorm:"column:vintage_year;not null" json:"vintage_year"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt time.Time `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 func (Listing) TableName() string {
 	return "Listings"
+}
+
+// BeforeCreate sets listing_id if not already set (DBs without default uuid).
+func (l *Listing) BeforeCreate(tx *gorm.DB) error {
+	if l.ListingID == uuid.Nil {
+		l.ListingID = uuid.New()
+	}
+	return nil
 }

@@ -3,7 +3,9 @@ package router
 import (
 	"net/http"
 
+	"github.com/redis/go-redis/v9"
 	authsvc "troo-backend/internal/application/auth"
+	emailsvc "troo-backend/internal/application/emails"
 	holdsvc "troo-backend/internal/application/holdings"
 	invsvc "troo-backend/internal/application/invitations"
 	lesvc "troo-backend/internal/application/listingevents"
@@ -54,7 +56,7 @@ func (g *gormDBPinger) Ping() error {
 	return sqlDB.Ping()
 }
 
-func CreateApp(cfg *config.Config) (*fiber.App, error) {
+func CreateApp(cfg *config.Config) (*fiber.App, *gorm.DB, *redis.Client, error) {
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage:   true,
 		ErrorHandler:            middleware.ErrorHandler,
@@ -71,15 +73,16 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 		return stripeWebhook.HandleWebhook(c)
 	})
 
-	sessionHandler, rdb, err := middleware.Session(middleware.SessionConfig{
+	sessionHandler, redisClient, err := middleware.Session(middleware.SessionConfig{
 		Secret:            cfg.SessionSecret,
 		RedisURL:          cfg.RedisURL,
 		AllowCrossSiteDev: cfg.AllowCrossSiteDev,
 		IsProduction:      cfg.Env == "production",
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
+	rdb := redisClient
 	app.Use(sessionHandler)
 	app.Use(middleware.HealthMarker(rdb))
 	app.Use(middleware.ResponseFormatter())
@@ -109,7 +112,7 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 		var errDB error
 		db, errDB = database.Open(cfg.DatabaseURL)
 		if errDB != nil {
-			return nil, errDB
+			return nil, nil, nil, errDB
 		}
 		hh.DB = &gormDBPinger{db: db}
 	}
@@ -140,13 +143,17 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 	}
 
 	if db != nil && rdb != nil {
-		// User
-		us := &usersvc.Service{DB: db, Rdb: rdb}
+		// User (with optional welcome email via Brevo, same env as Express: SENDINBLUE_API_KEY, MAIL_FROM)
+		var emailSender emailsvc.Sender
+		if cfg.SendinblueAPIKey != "" {
+			emailSender = &emailsvc.BrevoClient{APIKey: cfg.SendinblueAPIKey, MailFrom: cfg.MailFrom}
+		}
+		us := &usersvc.Service{DB: db, Rdb: rdb, EmailSender: emailSender}
 		uh := &userhandler.Handlers{Service: us, Config: sessionCfg}
 		ug := app.Group("/api/v1/users", middleware.RequireAuth())
 		ug.Post("/create-user", uh.CreateUser)
-		ug.Put("/update-user/:id", uh.UpdateUser)
-		ug.Get("/view-user/:id", uh.ViewUser)
+		ug.Put("/update-user", uh.UpdateUser)
+		ug.Get("/view-user", uh.ViewUser)
 		ug.Patch("/update-role", middleware.AuthorizePermission(constants.AssignRole), uh.UpdateRole)
 		ug.Delete("/remove-user", middleware.AuthorizePermission(constants.RemoveUser), uh.RemoveUser)
 
@@ -156,7 +163,7 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 		og := app.Group("/api/v1/orgs", middleware.RequireAuth())
 		og.Post("/create-org", oh.CreateOrg)
 		og.Get("/view-org", oh.ViewOrg)
-		og.Patch("/update-org/:id", oh.UpdateOrg)
+		og.Patch("/update-org", oh.UpdateOrg)
 
 		// Uploads
 		sc := &uploadsvc.HTTPClient{BaseURL: cfg.SupabaseURL, SecretKey: cfg.SupabaseSecretKey}
@@ -197,7 +204,7 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 		lg.Post("/cancel-listing", lh.CancelListing)
 
 		// Invitations
-		is := &invsvc.Service{DB: db}
+		is := &invsvc.Service{DB: db, EmailSender: emailSender, InviteBaseURL: cfg.InviteBaseURL}
 		ih := &invhandler.Handlers{Service: is, Config: sessionCfg}
 		app.Post("/api/v1/invitations/public/check-token", ih.CheckToken)
 		ig := app.Group("/api/v1/invitations", middleware.RequireAuth())
@@ -239,7 +246,7 @@ func CreateApp(cfg *config.Config) (*fiber.App, error) {
 		leg.Get("/get-org-listing-events", leh.GetOrgListingEvents)
 	}
 
-	return app, nil
+	return app, db, rdb, nil
 }
 
 func Handler(app *fiber.App) http.Handler {

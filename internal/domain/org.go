@@ -16,9 +16,8 @@ type Org struct {
 	RegistrationID     *string        `gorm:"column:registration_id" json:"registration_id"`
 	LogoURL            *string        `gorm:"column:logo_url" json:"logo_url"`
 	IncorporationDocURL *string       `gorm:"column:incorporation_doc_url" json:"incorporation_doc_url"`
-	CreatedAt          time.Time      `json:"createdAt"`
-	UpdatedAt          time.Time      `json:"updatedAt"`
-	DeletedAt          gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt time.Time `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 func (Org) TableName() string {

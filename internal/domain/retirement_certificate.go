@@ -17,10 +17,9 @@ type RetirementCertificate struct {
 	Beneficiary       *string        `gorm:"column:beneficiary" json:"beneficiary"`
 	TransactionID     uuid.UUID      `gorm:"column:transaction_id;type:uuid;not null" json:"transaction_id"`
 	CertificateNumber string         `gorm:"column:certificate_number;uniqueIndex;not null" json:"certificate_number"`
-	Status            string         `gorm:"column:status;type:varchar(20);not null;default:'issued'" json:"status"`
-	CreatedAt         time.Time      `json:"createdAt"`
-	UpdatedAt         time.Time      `json:"updatedAt"`
-	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
+	Status            string    `gorm:"column:status;type:varchar(20);not null;default:'issued'" json:"status"`
+	CreatedAt         time.Time `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt         time.Time `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 func (RetirementCertificate) TableName() string {

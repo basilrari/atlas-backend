@@ -70,8 +70,8 @@ This document maps every Express route and component to the planned Go implement
 | Method | Express path | Express handler | Permission | Go handler (planned) |
 |--------|--------------|-----------------|------------|------------------------|
 | POST | `/api/v1/users/create-user` | userController.createUserController | — | `handlers/user.CreateUser` |
-| PUT | `/api/v1/users/update-user/:id` | userController.updateUserController | — | `handlers/user.UpdateUser` |
-| GET | `/api/v1/users/view-user/:id` | userController.viewUserController | — | `handlers/user.ViewUser` |
+| PUT | `/api/v1/users/update-user` | userController.updateUserController | — | `handlers/user.UpdateUser` |
+| GET | `/api/v1/users/view-user` | userController.viewUserController | — | `handlers/user.ViewUser` |
 | PATCH | `/api/v1/users/update-role` | userController.updateUserRoleController | ASSIGN_ROLE | `handlers/user.UpdateRole` + middleware |
 | DELETE | `/api/v1/users/remove-user` | userController.removeUserFromOrgController | REMOVE_USER | `handlers/user.RemoveUser` + middleware |
 
@@ -91,7 +91,7 @@ This document maps every Express route and component to the planned Go implement
 |--------|--------------|-----------------|------------------------|
 | POST | `/api/v1/orgs/create-org` | orgController.createOrgController | `handlers/org.CreateOrg` |
 | GET | `/api/v1/orgs/view-org` | orgController.getOrgByIdController | `handlers/org.ViewOrg` |
-| PATCH | `/api/v1/orgs/update-org/:id` | orgController.updateOrgController | `handlers/org.UpdateOrg` |
+| PATCH | `/api/v1/orgs/update-org` | orgController.updateOrgController | `handlers/org.UpdateOrg` (org_id from session) |
 
 ---
 

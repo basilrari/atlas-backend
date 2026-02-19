@@ -14,10 +14,9 @@ type Transaction struct {
 	FromOrgID        *uuid.UUID     `gorm:"column:from_org_id;type:uuid" json:"from_org_id"`
 	ToOrgID          *uuid.UUID     `gorm:"column:to_org_id;type:uuid" json:"to_org_id"`
 	Amount           float64        `gorm:"column:amount;type:decimal(18,2);not null" json:"amount"`
-	RelatedListingID *uuid.UUID     `gorm:"column:related_listing_id;type:uuid" json:"related_listing_id"`
-	CreatedAt        time.Time      `json:"createdAt"`
-	UpdatedAt        time.Time      `json:"updatedAt"`
-	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+	RelatedListingID *uuid.UUID `gorm:"column:related_listing_id;type:uuid" json:"related_listing_id"`
+	CreatedAt        time.Time  `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt        time.Time  `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 func (Transaction) TableName() string {

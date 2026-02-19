@@ -11,6 +11,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/stripe/stripe-go/v76"
+	"github.com/stripe/stripe-go/v76/paymentintent"
 )
 
 type Handlers struct {
@@ -28,16 +30,32 @@ type StripePaymentIntentResult struct {
 	ClientSecret string `json:"client_secret"`
 }
 
-// RealStripeCreator uses the Stripe Go SDK or HTTP API. Stubbed here for compilation;
-// real implementation will use github.com/stripe/stripe-go.
+// RealStripeCreator uses the Stripe Go SDK to create PaymentIntents.
 type RealStripeCreator struct {
 	SecretKey string
 }
 
 func (r *RealStripeCreator) Create(amountCents int64, currency string, metadata map[string]string) (*StripePaymentIntentResult, error) {
-	// In production, call Stripe API. For now return placeholder that will be replaced
-	// by real Stripe SDK call in the payments/webhook batch.
-	return nil, fiber.NewError(501, "Stripe integration pending")
+	if r.SecretKey == "" {
+		return nil, fiber.NewError(501, "Stripe integration pending")
+	}
+	stripe.Key = r.SecretKey
+	params := &stripe.PaymentIntentParams{
+		Amount:   stripe.Int64(amountCents),
+		Currency: stripe.String(currency),
+		Metadata: metadata,
+		AutomaticPaymentMethods: &stripe.PaymentIntentAutomaticPaymentMethodsParams{
+			Enabled: stripe.Bool(true),
+		},
+	}
+	pi, err := paymentintent.New(params)
+	if err != nil {
+		return nil, err
+	}
+	return &StripePaymentIntentResult{
+		ID:           pi.ID,
+		ClientSecret: pi.ClientSecret,
+	}, nil
 }
 
 // BuyCredits POST /api/v1/trading/buy-credits — ONLY creates Stripe PaymentIntent.
@@ -80,7 +98,11 @@ func (h *Handlers) BuyCredits(c *fiber.Ctx) error {
 		"credits_amount": strconv.FormatFloat(body.Amount, 'f', 2, 64),
 	})
 	if err != nil {
-		return response.Error(c, err.Error(), 500, nil)
+		code := 500
+		if e, ok := err.(*fiber.Error); ok {
+			code = e.Code
+		}
+		return response.Error(c, err.Error(), code, nil)
 	}
 
 	return response.Success(c, "Payment intent created", fiber.Map{
@@ -178,27 +200,37 @@ func (h *Handlers) TransferCredits(c *fiber.Ctx) error {
 	return response.Success(c, "Transfer successful", result, nil)
 }
 
-// RetireCredits POST /api/v1/trading/retire-credits
+// RetireCredits POST /api/v1/trading/retire-credits — org_id from session (user can only retire their org's credits).
 func (h *Handlers) RetireCredits(c *fiber.Ctx) error {
+	actor := getActorTrading(c)
+	if actor == nil || actor.OrgID == "" {
+		return response.Error(c, "User is not associated with any organization", 403, nil)
+	}
+	orgID, err := uuid.Parse(actor.OrgID)
+	if err != nil {
+		return response.Error(c, "User is not associated with any organization", 403, nil)
+	}
+
 	var body struct {
-		OrgID       string  `json:"org_id"`
 		ProjectID   string  `json:"project_id"`
 		Amount      float64 `json:"amount"`
 		Purpose     *string `json:"purpose"`
 		Beneficiary *string `json:"beneficiary"`
 	}
 	if err := c.BodyParser(&body); err != nil {
-		return response.Error(c, "org_id, project_id and amount are required", 400, nil)
+		return response.Error(c, "project_id and amount are required", 400, nil)
 	}
-	if body.OrgID == "" || body.ProjectID == "" || body.Amount == 0 {
-		return response.Error(c, "org_id, project_id and amount are required", 400, nil)
+	if body.ProjectID == "" || body.Amount == 0 {
+		return response.Error(c, "project_id and amount are required", 400, nil)
 	}
 	if body.Amount <= 0 {
 		return response.Error(c, "Amount must be a positive number", 400, nil)
 	}
 
-	orgID, _ := uuid.Parse(body.OrgID)
-	projectID, _ := uuid.Parse(body.ProjectID)
+	projectID, err := uuid.Parse(body.ProjectID)
+	if err != nil {
+		return response.Error(c, "Invalid project_id", 400, nil)
+	}
 
 	result, err := h.Service.RetireCredits(c.Context(), orgID, projectID, body.Amount, body.Purpose, body.Beneficiary)
 	if err != nil {

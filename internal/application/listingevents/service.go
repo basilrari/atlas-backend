@@ -28,7 +28,7 @@ func (s *Service) GetOrgListingEvents(ctx context.Context, orgID uuid.UUID) ([]d
 	}
 
 	var events []domain.ListingEvent
-	if err := s.DB.WithContext(ctx).Where("actor_org_code = ?", org.OrgCode).Order("created_at ASC").Find(&events).Error; err != nil {
+	if err := s.DB.WithContext(ctx).Where("actor_org_code = ?", org.OrgCode).Order(`"createdAt" ASC`).Find(&events).Error; err != nil {
 		return nil, err
 	}
 

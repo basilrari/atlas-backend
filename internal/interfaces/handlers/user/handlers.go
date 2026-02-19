@@ -70,12 +70,13 @@ func (h *Handlers) CreateUser(c *fiber.Ctx) error {
 	return response.SuccessCreated(c, "User created successfully", fiber.Map{"user": safe}, nil)
 }
 
-// UpdateUser PUT /api/v1/users/update-user/:id
+// UpdateUser PUT /api/v1/users/update-user — updates the session user (user_id from session).
 func (h *Handlers) UpdateUser(c *fiber.Ctx) error {
-	userID := c.Params("id")
-	if userID == "" {
-		return response.Error(c, "Invalid user ID format (must be a valid UUID)", 400, nil)
+	actor := getSessionActor(c)
+	if actor == nil {
+		return response.Unauthorized(c, "Unauthorized")
 	}
+	userID := actor.UserID
 	if _, err := uuid.Parse(userID); err != nil {
 		return response.Error(c, "Invalid user ID format (must be a valid UUID)", 400, nil)
 	}
@@ -92,12 +93,13 @@ func (h *Handlers) UpdateUser(c *fiber.Ctx) error {
 	return response.Success(c, "User updated successfully", fiber.Map{"user": safeUser(u)}, nil)
 }
 
-// ViewUser GET /api/v1/users/view-user/:id
+// ViewUser GET /api/v1/users/view-user — returns the session user (user_id from session).
 func (h *Handlers) ViewUser(c *fiber.Ctx) error {
-	userID := c.Params("id")
-	if userID == "" {
-		return response.Error(c, "Missing user ID", 400, nil)
+	actor := getSessionActor(c)
+	if actor == nil {
+		return response.Unauthorized(c, "Unauthorized")
 	}
+	userID := actor.UserID
 
 	u, err := h.Service.ViewUser(c.Context(), userID)
 	if err != nil {

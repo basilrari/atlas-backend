@@ -15,14 +15,17 @@ type Config struct {
 	DatabaseURL        string
 	RedisURL           string
 	SupabaseURL        string
-	SupabaseSecretKey  string
+	SupabaseSecretKey  string // must be service_role key (Dashboard → API), not anon key
 	StripeSecretKey    string
 	StripeWebhookSecret string
 	FrontendURLEndsWith string
 	DevPassword        string
 	AllowCrossSiteDev  bool
-	HealthAdminKey     string
-	ICRAPIKey          string
+	HealthAdminKey       string
+	ICRAPIKey            string
+	SendinblueAPIKey     string // SENDINBLUE_API_KEY for welcome/notification emails (Brevo)
+	MailFrom             string // MAIL_FROM sender email (default noreply@troo.earth)
+	InviteBaseURL        string // Base URL for invite links (e.g. https://atlas.troo.earth), same logic as Express
 }
 
 // Load loads config from env and optional .env file.
@@ -68,7 +71,18 @@ func Load() (*Config, error) {
 		FrontendURLEndsWith: viper.GetString("FRONTEND_URL_ENDS_WITH"),
 		DevPassword:         viper.GetString("DEV_PASSWORD"),
 		AllowCrossSiteDev:   viper.GetString("ALLOW_CROSS_SITE_DEV") == "true",
-		HealthAdminKey:      viper.GetString("HEALTH_ADMIN_KEY"),
-		ICRAPIKey:           viper.GetString("ICR_API_KEY"),
+		HealthAdminKey:       viper.GetString("HEALTH_ADMIN_KEY"),
+		ICRAPIKey:            viper.GetString("ICR_API_KEY"),
+		SendinblueAPIKey:     viper.GetString("SENDINBLUE_API_KEY"),
+		MailFrom:             viper.GetString("MAIL_FROM"),
+		InviteBaseURL:        inviteBaseURL(viper.GetString("INVITE_BASE_URL")),
 	}, nil
+}
+
+func inviteBaseURL(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "https://atlas.troo.earth"
+	}
+	return s
 }

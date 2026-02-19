@@ -2,6 +2,7 @@ package trading
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -10,6 +11,7 @@ import (
 	"troo-backend/internal/domain"
 
 	"github.com/google/uuid"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
@@ -63,6 +65,19 @@ func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, a
 			if err := tx.Save(&holding).Error; err != nil {
 				return err
 			}
+			eventDataBytes, _ := json.Marshal(map[string]interface{}{
+				"credits_added":         amount,
+				"new_credits_available": existingListing.CreditsAvailable,
+				"price_per_credit":      existingListing.PricePerCredit,
+			})
+			if err := tx.Create(&domain.ListingEvent{
+				ListingID:    existingListing.ListingID,
+				EventType:    "UPDATED",
+				ActorOrgCode: &org.OrgCode,
+				EventData:    datatypes.JSON(eventDataBytes),
+			}).Error; err != nil {
+				return err
+			}
 			result = map[string]interface{}{
 				"listing_id":        existingListing.ListingID,
 				"credits_available": existingListing.CreditsAvailable,
@@ -94,12 +109,24 @@ func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, a
 			LocationCountry:  safeStr(project.CountryCode),
 			Methodology:      "N/A",
 			Category:         "N/A",
+			SdgNumbers:       "[]", // Postgres json column requires valid JSON
 		}
 
 		if err := tx.Create(&listing).Error; err != nil {
 			return err
 		}
-
+		eventDataBytes, _ := json.Marshal(map[string]interface{}{
+			"credits_available": listing.CreditsAvailable,
+			"price_per_credit":   listing.PricePerCredit,
+		})
+		if err := tx.Create(&domain.ListingEvent{
+			ListingID:    listing.ListingID,
+			EventType:    "CREATED",
+			ActorOrgCode: &org.OrgCode,
+			EventData:    datatypes.JSON(eventDataBytes),
+		}).Error; err != nil {
+			return err
+		}
 		result = map[string]interface{}{
 			"listing_id":        listing.ListingID,
 			"credits_available": listing.CreditsAvailable,

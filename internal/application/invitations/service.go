@@ -5,14 +5,18 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	"troo-backend/internal/application/emails"
 	"troo-backend/internal/application/policies/invitations"
 	"troo-backend/internal/domain"
 	userPolicies "troo-backend/internal/application/policies/user"
+	"troo-backend/internal/pkg/constants"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
 
@@ -20,7 +24,9 @@ const dayMS = 24 * time.Hour
 const inviteExpiry = 7 * dayMS
 
 type Service struct {
-	DB *gorm.DB
+	DB            *gorm.DB
+	EmailSender   emails.Sender   // optional; when set, invite email is sent (same as Express)
+	InviteBaseURL string          // base URL for invite link (e.g. https://atlas.troo.earth), same logic as Express
 }
 
 type SendInviteInput struct {
@@ -33,6 +39,9 @@ type SendInviteInput struct {
 }
 
 func (s *Service) SendInvite(ctx context.Context, in SendInviteInput) (*domain.Invitation, error) {
+	if !constants.IsValidRole(in.Role) {
+		return nil, errors.New("Invalid role. Allowed: viewer, manager, admin, superadmin")
+	}
 	if err := userPolicies.ValidateRoleAssignment(s.DB, userPolicies.ValidateRoleAssignmentParams{
 		ActorRole:    in.ActorRole,
 		TargetRole:   in.Role,
@@ -68,6 +77,7 @@ func (s *Service) SendInvite(ctx context.Context, in SendInviteInput) (*domain.I
 		if err := s.DB.WithContext(ctx).Create(inv).Error; err != nil {
 			return nil, err
 		}
+		s.sendInviteEmail(ctx, inv, false)
 		return inv, nil
 	} else if err != nil {
 		return nil, err
@@ -80,6 +90,7 @@ func (s *Service) SendInvite(ctx context.Context, in SendInviteInput) (*domain.I
 	if err := s.DB.WithContext(ctx).Save(&existing).Error; err != nil {
 		return nil, err
 	}
+	s.sendInviteEmail(ctx, &existing, false)
 	return &existing, nil
 }
 
@@ -109,6 +120,7 @@ func (s *Service) ResendInvite(ctx context.Context, in ResendInviteInput) (*doma
 	if err := s.DB.WithContext(ctx).Save(&inv).Error; err != nil {
 		return nil, err
 	}
+	s.sendInviteEmail(ctx, &inv, true) // isResend = true -> "Reminder: Invitation to join..."
 	return &inv, nil
 }
 
@@ -211,7 +223,7 @@ func (s *Service) ListOrgInvitations(ctx context.Context, in ListInvitesInput) (
 		q = q.Where("status = ?", in.Status)
 	}
 	var invitations []domain.Invitation
-	if err := q.Order("created_at DESC").Find(&invitations).Error; err != nil {
+	if err := q.Order(`"createdAt" DESC`).Find(&invitations).Error; err != nil {
 		return nil, err
 	}
 	return invitations, nil
@@ -270,4 +282,35 @@ func randomHex(n int) string {
 	b := make([]byte, n)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// sendInviteEmail builds the invite link (same as Express: login vs register, invite_token) and sends the email.
+func (s *Service) sendInviteEmail(ctx context.Context, inv *domain.Invitation, isResend bool) {
+	if s.EmailSender == nil || s.InviteBaseURL == "" {
+		return
+	}
+	base := strings.TrimSuffix(s.InviteBaseURL, "/")
+	// Same as Express: invitePath = existingUser ? "login" : "register"
+	var existingUser bool
+	if err := s.DB.WithContext(ctx).Where("email = ?", inv.Email).First(&domain.User{}).Error; err == nil {
+		existingUser = true
+	}
+	path := "register"
+	if existingUser {
+		path = "login"
+	}
+	inviteLink := fmt.Sprintf("%s/%s?invite_token=%s", base, path, inv.InviteToken)
+
+	var org domain.Org
+	orgName := ""
+	if err := s.DB.WithContext(ctx).Where("org_id = ?", inv.OrgID).First(&org).Error; err == nil {
+		orgName = org.OrgName
+	}
+	subject := fmt.Sprintf("You have been invited to join %s", orgName)
+	if isResend {
+		subject = fmt.Sprintf("Reminder: Invitation to join %s", orgName)
+	}
+	if err := s.EmailSender.SendInvite(ctx, inv.Email, inviteLink, orgName, inv.Role, subject); err != nil {
+		log.Error().Err(err).Str("to", inv.Email).Str("org", orgName).Msg("invite email send failed")
+	}
 }

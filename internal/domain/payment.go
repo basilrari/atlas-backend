@@ -19,9 +19,8 @@ type Payment struct {
 	Currency               string         `gorm:"column:currency;not null" json:"currency"`
 	Status                 string         `gorm:"column:status;not null" json:"status"`
 	RawPaymentIntent       datatypes.JSON `gorm:"column:raw_payment_intent;type:jsonb;not null" json:"raw_payment_intent"`
-	CreatedAt              time.Time      `json:"createdAt"`
-	UpdatedAt              time.Time      `json:"updatedAt"`
-	DeletedAt              gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
 func (Payment) TableName() string {

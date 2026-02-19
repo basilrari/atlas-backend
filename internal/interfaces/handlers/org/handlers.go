@@ -126,16 +126,23 @@ func (h *Handlers) ViewOrg(c *fiber.Ctx) error {
 	return response.Success(c, "Organization fetched successfully", org, nil)
 }
 
-// UpdateOrg PATCH /api/v1/orgs/update-org/:id
+// UpdateOrg PATCH /api/v1/orgs/update-org — updates the session user's org only (org_id from session).
 func (h *Handlers) UpdateOrg(c *fiber.Ctx) error {
-	idStr := c.Params("id")
-	if idStr == "" {
-		return response.Error(c, "Missing org_id", 400, nil)
+	actor := middleware.GetUser(c)
+	if actor == nil {
+		return response.Unauthorized(c, "Unauthorized")
 	}
-	orgID, err := uuid.Parse(idStr)
+	m, ok := actor.(map[string]interface{})
+	if !ok {
+		return response.Error(c, "Authorization error", 500, nil)
+	}
+	orgIDStr, _ := m["org_id"].(string)
+	if orgIDStr == "" {
+		return response.Error(c, "User is not associated with any organization", 403, nil)
+	}
+	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		// Express doesn't validate UUID format; treat as missing/invalid org
-		return response.Error(c, "Missing org_id", 400, nil)
+		return response.Error(c, "User is not associated with any organization", 403, nil)
 	}
 
 	var body map[string]interface{}

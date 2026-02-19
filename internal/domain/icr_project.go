@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // IcrProject matches Express icrProjects model (icrProjects.js).
@@ -38,7 +37,6 @@ type IcrProject struct {
 	SyncedAt                time.Time     `gorm:"column:syncedAt;not null" json:"syncedAt"`
 	CreatedAt               time.Time     `json:"createdAt"`
 	UpdatedAt               time.Time     `json:"updatedAt"`
-	DeletedAt               gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (IcrProject) TableName() string {

@@ -127,6 +127,10 @@ func TestTransferCredits_MissingFields(t *testing.T) {
 func TestRetireCredits_MissingFields(t *testing.T) {
 	h, _ := setupTradingTest(t)
 	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user", map[string]interface{}{"user_id": uuid.New().String(), "org_id": uuid.New().String()})
+		return c.Next()
+	})
 	app.Post("/retire-credits", h.RetireCredits)
 
 	body, _ := json.Marshal(map[string]interface{}{})

@@ -15,10 +15,9 @@ type User struct {
 	Email       string         `gorm:"column:email;not null;uniqueIndex" json:"email"`
 	PasswordHash string        `gorm:"column:password_hash;not null" json:"-"`
 	OrgID       *uuid.UUID     `gorm:"column:org_id;type:uuid" json:"org_id"`
-	Role        string         `gorm:"column:role;not null;default:viewer" json:"role"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	Role        string    `gorm:"column:role;not null;default:viewer" json:"role"`
+	CreatedAt   time.Time `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt   time.Time `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 // TableName overrides table name to Users (Express tableName).

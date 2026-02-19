@@ -200,15 +200,10 @@ paths:
                   data: { type: object, properties: { user: { $ref: '#/components/schemas/UserSafe' } } }
         '400': { description: Validation error }
         '409': { description: Email or username already registered }
-  /api/v1/users/update-user/{id}:
+  /api/v1/users/update-user:
     put:
-      summary: Update user
+      summary: Update session user
       operationId: usersUpdateUser
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
       requestBody:
         content:
           application/json:
@@ -223,15 +218,10 @@ paths:
         '200': { description: User updated }
         '400': { description: Invalid input }
         '404': { description: User not found }
-  /api/v1/users/view-user/{id}:
+  /api/v1/users/view-user:
     get:
-      summary: View user by ID
+      summary: View session user
       operationId: usersViewUser
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
       responses:
         '200': { description: User found }
         '400': { description: Missing user ID }
@@ -318,15 +308,10 @@ paths:
         '200': { description: Org with employees }
         '403': { description: User not associated with org }
         '404': { description: Org not found }
-  /api/v1/orgs/update-org/{id}:
+  /api/v1/orgs/update-org:
     patch:
-      summary: Update organization
+      summary: Update session user's organization
       operationId: orgsUpdateOrg
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
       requestBody:
         content:
           application/json:

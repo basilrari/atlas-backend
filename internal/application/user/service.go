@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"troo-backend/internal/application/emails"
 	"troo-backend/internal/application/policies/user"
 	"troo-backend/internal/domain"
 	"troo-backend/internal/pkg/constants"
@@ -13,14 +14,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-// Service holds DB and Redis for user operations.
+// Service holds DB, Redis, and optional email sender for user operations.
 type Service struct {
-	DB  *gorm.DB
-	Rdb *redis.Client
+	DB          *gorm.DB
+	Rdb         *redis.Client
+	EmailSender emails.Sender // optional; when set, welcome email is sent after CreateUser (same as Express)
 }
 
 // CreateUserInput matches Express createUserService({ user_name, email, password, fullname }).
@@ -77,6 +80,20 @@ func (s *Service) CreateUser(ctx context.Context, in CreateUserInput) (*domain.U
 	if err := s.DB.WithContext(ctx).Create(u).Error; err != nil {
 		return nil, err
 	}
+
+	// Send welcome email (non-blocking, same as Express)
+	if s.EmailSender != nil {
+		firstName := fullname
+		if idx := strings.IndexByte(fullname, ' '); idx > 0 {
+			firstName = fullname[:idx]
+		}
+		go func(to, first string) {
+			if err := s.EmailSender.SendWelcome(context.Background(), to, first); err != nil {
+				log.Error().Err(err).Str("to", to).Msg("welcome email send failed")
+			}
+		}(email, firstName)
+	}
+
 	return u, nil
 }
 
@@ -171,6 +188,20 @@ func (s *Service) UpdateUser(ctx context.Context, userID string, fields map[stri
 	if err := s.DB.WithContext(ctx).Where("user_id = ?", userID).First(&u).Error; err != nil {
 		return nil, err
 	}
+
+	// Send account-updated email (non-blocking, same as Express)
+	if s.EmailSender != nil {
+		firstName := u.Fullname
+		if idx := strings.IndexByte(u.Fullname, ' '); idx > 0 {
+			firstName = u.Fullname[:idx]
+		}
+		go func(to, first string) {
+			if err := s.EmailSender.SendAccountUpdated(context.Background(), to, first); err != nil {
+				log.Error().Err(err).Str("to", to).Msg("account updated email send failed")
+			}
+		}(u.Email, firstName)
+	}
+
 	return &u, nil
 }
 
@@ -200,6 +231,9 @@ type UpdateUserRoleInput struct {
 
 // UpdateUserRole updates target user's role after policy check and destroys their sessions (Express updateUserRoleService).
 func (s *Service) UpdateUserRole(ctx context.Context, in UpdateUserRoleInput) (*domain.User, error) {
+	if !constants.IsValidRole(in.TargetRole) {
+		return nil, errors.New("Invalid role. Allowed: viewer, manager, admin, superadmin")
+	}
 	if err := policies.ValidateRoleAssignment(s.DB, policies.ValidateRoleAssignmentParams{
 		ActorRole:    in.ActorRole,
 		TargetRole:   in.TargetRole,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	listsvc "troo-backend/internal/application/listings"
 	"troo-backend/internal/middleware"
@@ -66,7 +67,7 @@ func (h *Handlers) CreateListing(c *fiber.Ctx) error {
 		LocationCountry:  asString(body["location_country"]),
 		ThumbnailURL:     asString(body["thumbnail_url"]),
 		Status:           asStringDef(body["status"], "open"),
-		SdgNumbers:       asStringDef(body["sdg_numbers"], ""),
+		SdgNumbers:       asJSONSliceString(body["sdg_numbers"], "[]"),
 		Methodology:      asString(body["methodology"]),
 		VintageYear:      asInt(body["vintage_year"]),
 	})
@@ -206,14 +207,17 @@ func (h *Handlers) EditListing(c *fiber.Ctx) error {
 			"Invalid quantity":                             400,
 			"No valid changes provided":                    400,
 			"Listing not found":                            404,
-			"Listing is not editable":                      400,
 			"Unauthorized listing edit":                    403,
 			"Registry listings cannot be edited by User":   403,
 			"Insufficient credits to increase listing":     400,
 			"Holdings not found":                           404,
+			"Org not found":                                404,
 		}
 		if code, ok := statusMap[err.Error()]; ok {
 			return response.Error(c, err.Error(), code, nil)
+		}
+		if strings.Contains(err.Error(), "Listing is not editable") {
+			return response.Error(c, err.Error(), 400, nil)
 		}
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
@@ -288,6 +292,25 @@ func asStringDef(v interface{}, def string) string {
 		return def
 	}
 	return s
+}
+
+// asJSONSliceString returns a JSON string for the sdg_numbers column (Postgres json type). Accepts string or slice.
+func asJSONSliceString(v interface{}, def string) string {
+	if v == nil {
+		return def
+	}
+	if s, ok := v.(string); ok {
+		if s == "" {
+			return def
+		}
+		return s
+	}
+	// Slice/array from JSON body (e.g. [7, 13]) — marshal to valid JSON
+	bs, err := json.Marshal(v)
+	if err != nil {
+		return def
+	}
+	return string(bs)
 }
 
 func asFloat(v interface{}) float64 {

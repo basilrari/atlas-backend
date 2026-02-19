@@ -33,7 +33,7 @@ func (s *Service) ViewTransactions(ctx context.Context, orgID string) (interface
 	var txs []domain.Transaction
 	if err := s.DB.WithContext(ctx).
 		Where("from_org_id = ? OR to_org_id = ?", orgID, orgID).
-		Order("created_at DESC").
+		Order(`"createdAt" DESC`).
 		Find(&txs).Error; err != nil {
 		return nil, "Internal Server Error", 500
 	}
@@ -77,7 +77,7 @@ func (s *Service) ViewTransactions(ctx context.Context, orgID string) (interface
 			ids = append(ids, id)
 		}
 		var projs []domain.IcrProject
-		s.DB.WithContext(ctx).Where("id IN ?", ids).Select("id, fullName, thumbnail").Find(&projs)
+		s.DB.WithContext(ctx).Where("id IN ?", ids).Select(`id, "fullName", thumbnail`).Find(&projs)
 		for _, p := range projs {
 			projMap[p.ID.String()] = struct {
 				Name      *string

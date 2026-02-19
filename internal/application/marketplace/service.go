@@ -34,8 +34,9 @@ func (s *Service) GetAllProjects(ctx context.Context, status *string) (map[strin
 	}
 
 	var projects []domain.IcrProject
-	err := s.DB.WithContext(ctx).Where(where).Order("syncedAt DESC").
-		Select("id, num, fullName, shortDescription, description, status, registry, city, state, countryCode, startDate, creditingPeriodStartDate, thumbnail, publicUrl, sector, additionalities, otherBenefits, methodology, type, estimatedAnnualMitigations, location, kmlFile, proponents, validators, documentation, syncedAt").
+	// Quote camelCase column names so PostgreSQL preserves case (DB uses fullName etc.)
+	err := s.DB.WithContext(ctx).Where(where).Order(`"syncedAt" DESC`).
+		Select(`id, num, "fullName", "shortDescription", description, status, registry, city, state, "countryCode", "startDate", "creditingPeriodStartDate", thumbnail, "publicUrl", sector, additionalities, "otherBenefits", methodology, type, "estimatedAnnualMitigations", location, "kmlFile", proponents, validators, documentation, "syncedAt"`).
 		Find(&projects).Error
 	if err != nil {
 		// Fallback to ICR API if DB fails and client is configured

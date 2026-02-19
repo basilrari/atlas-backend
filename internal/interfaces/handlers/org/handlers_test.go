@@ -73,16 +73,20 @@ func TestViewOrg_NoOrgOnUser(t *testing.T) {
 	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }
 
-// TestUpdateOrg_MissingID returns 400.
-func TestUpdateOrg_MissingID(t *testing.T) {
+// TestUpdateOrg_NoOrgInSession returns 403 when user has no org_id in session.
+func TestUpdateOrg_NoOrgInSession(t *testing.T) {
 	h, _ := setupOrgTest(t)
 	app := fiber.New()
-	app.Patch("/api/v1/orgs/update-org/:id", h.UpdateOrg)
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user", map[string]interface{}{"user_id": "11111111-1111-1111-1111-111111111111", "org_id": nil})
+		return c.Next()
+	})
+	app.Patch("/api/v1/orgs/update-org", h.UpdateOrg)
 
 	body, _ := json.Marshal(map[string]string{"org_name": "New Name"})
-	req := httptest.NewRequest("PATCH", "/api/v1/orgs/update-org/not-a-uuid", bytes.NewReader(body))
+	req := httptest.NewRequest("PATCH", "/api/v1/orgs/update-org", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	require.NoError(t, err)
-	assert.Equal(t, fiber.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, fiber.StatusForbidden, resp.StatusCode)
 }

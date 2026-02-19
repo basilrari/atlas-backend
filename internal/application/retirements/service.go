@@ -25,7 +25,7 @@ func (s *Service) ViewOrgRetirements(ctx context.Context, orgID string) (*ViewOr
 	}
 
 	var certs []domain.RetirementCertificate
-	if err := s.DB.WithContext(ctx).Where("org_id = ?", orgID).Order("created_at DESC").Find(&certs).Error; err != nil {
+	if err := s.DB.WithContext(ctx).Where("org_id = ?", orgID).Order(`"createdAt" DESC`).Find(&certs).Error; err != nil {
 		return nil, err
 	}
 	return &ViewOrgResult{Data: certs}, nil
