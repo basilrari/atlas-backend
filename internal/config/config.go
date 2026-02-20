@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strings"
 
@@ -58,12 +59,20 @@ func Load() (*Config, error) {
 		dbURL = os.Getenv("DATABASE_URL_DEV")
 	}
 
+	redisURL := viper.GetString("REDIS_URL")
+	if redisURL == "" {
+		return nil, errors.New("REDIS_URL is required (e.g. redis://localhost:6379 or rediss://host:6379)")
+	}
+	if !strings.HasPrefix(redisURL, "redis://") && !strings.HasPrefix(redisURL, "rediss://") {
+		return nil, errors.New("REDIS_URL must use scheme redis:// or rediss://")
+	}
+
 	return &Config{
 		Env:                 env,
 		Port:                port,
 		SessionSecret:       viper.GetString("SESSION_SECRET"),
 		DatabaseURL:         dbURL,
-		RedisURL:            viper.GetString("REDIS_URL"),
+		RedisURL:            redisURL,
 		SupabaseURL:         viper.GetString("SUPABASE_URL"),
 		SupabaseSecretKey:   viper.GetString("SUPABASE_SECRET_KEY"),
 		StripeSecretKey:     viper.GetString("STRIPE_SECRET_KEY"),
