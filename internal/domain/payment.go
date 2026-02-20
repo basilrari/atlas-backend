@@ -19,8 +19,9 @@ type Payment struct {
 	Currency               string         `gorm:"column:currency;not null" json:"currency"`
 	Status                 string         `gorm:"column:status;not null" json:"status"`
 	RawPaymentIntent       datatypes.JSON `gorm:"column:raw_payment_intent;type:jsonb;not null" json:"raw_payment_intent"`
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
+	// Column names match Sequelize default (camelCase) for shared DB with Express
+	CreatedAt time.Time `gorm:"column:createdAt" json:"createdAt"`
+	UpdatedAt time.Time `gorm:"column:updatedAt" json:"updatedAt"`
 }
 
 func (Payment) TableName() string {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -44,14 +45,22 @@ type paymentIntentObject struct {
 // HandleWebhook POST /api/v1/stripe/webhook — raw body, signature verification, then process.
 func (wh *WebhookHandler) HandleWebhook(c *fiber.Ctx) error {
 	rawBody := c.BodyRaw()
-	sig := c.Get("stripe-signature")
+	// Stripe sends "Stripe-Signature"; Fiber's Get is case-insensitive
+	sig := c.Get("Stripe-Signature")
+
+	if len(rawBody) == 0 {
+		log.Warn().Msg("Stripe webhook received empty body (ensure no global body parser consumes the webhook body)")
+		return c.Status(400).SendString("Webhook Error: empty body")
+	}
 
 	if err := verifyStripeSignature(rawBody, sig, wh.WebhookSecret); err != nil {
+		log.Warn().Err(err).Bool("has_sig", sig != "").Bool("has_secret", wh.WebhookSecret != "").Msg("Stripe webhook signature verification failed")
 		return c.Status(400).SendString(fmt.Sprintf("Webhook Error: %s", err.Error()))
 	}
 
 	var event stripeEvent
 	if err := json.Unmarshal(rawBody, &event); err != nil {
+		log.Warn().Err(err).Msg("Stripe webhook JSON parse failed")
 		return c.Status(400).SendString(fmt.Sprintf("Webhook Error: %s", err.Error()))
 	}
 
