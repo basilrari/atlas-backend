@@ -58,7 +58,7 @@ func (s *Service) CreateListing(ctx context.Context, in CreateListingInput) (*do
 		LocationCountry:  in.LocationCountry,
 		ThumbnailURL:     in.ThumbnailURL,
 		Status:           status,
-		SdgNumbers:       in.SdgNumbers,
+		SdgNumbers:       domain.SDGNumbers(in.SdgNumbers),
 		Methodology:      in.Methodology,
 		VintageYear:      in.VintageYear,
 	}
@@ -113,7 +113,25 @@ func (s *Service) GetOrgListings(ctx context.Context, orgID uuid.UUID) ([]domain
 	return listings, nil
 }
 
-func (s *Service) GetListingByID(ctx context.Context, listingID uuid.UUID) (*domain.Listing, error) {
+// GetListingByIDResult matches Express getListingByIdService return shape: { listing_id, price_per_credit, credits_available, seller, project }.
+type GetListingByIDResult struct {
+	ListingID        uuid.UUID       `json:"listing_id"`
+	PricePerCredit   float64         `json:"price_per_credit"`
+	CreditsAvailable float64         `json:"credits_available"`
+	Seller           GetListingSeller `json:"seller"`
+	Project          *domain.IcrProject `json:"project"`
+}
+
+// GetListingSeller matches Express seller object: type 'org' | 'registry' | 'unknown'.
+type GetListingSeller struct {
+	Type    string  `json:"type"` // "org" | "registry" | "unknown"
+	OrgID   *string `json:"org_id,omitempty"`
+	OrgName *string `json:"org_name,omitempty"`
+	OrgCode *string `json:"org_code,omitempty"`
+	Name    *string `json:"name,omitempty"` // for type registry
+}
+
+func (s *Service) GetListingByID(ctx context.Context, listingID uuid.UUID) (*GetListingByIDResult, error) {
 	if listingID == uuid.Nil {
 		return nil, errors.New("listing_id is required")
 	}
@@ -124,7 +142,41 @@ func (s *Service) GetListingByID(ctx context.Context, listingID uuid.UUID) (*dom
 		}
 		return nil, err
 	}
-	return &listing, nil
+	var project domain.IcrProject
+	if err := s.DB.WithContext(ctx).Where("id = ?", listing.ProjectID).First(&project).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New("Project not found for listing")
+		}
+		return nil, err
+	}
+	var seller GetListingSeller
+	if listing.SellerID != nil {
+		var org domain.Org
+		if err := s.DB.WithContext(ctx).Where("org_id = ?", *listing.SellerID).First(&org).Error; err != nil {
+			seller = GetListingSeller{Type: "unknown"}
+		} else {
+			oid, oname, ocode := org.OrgID.String(), org.OrgName, org.OrgCode
+			seller = GetListingSeller{
+				Type:    "org",
+				OrgID:   &oid,
+				OrgName: &oname,
+				OrgCode: &ocode,
+			}
+		}
+	} else {
+		name := listing.Registry
+		if name == "" {
+			name = "Registry"
+		}
+		seller = GetListingSeller{Type: "registry", Name: &name}
+	}
+	return &GetListingByIDResult{
+		ListingID:        listing.ListingID,
+		PricePerCredit:   listing.PricePerCredit,
+		CreditsAvailable: listing.CreditsAvailable,
+		Seller:           seller,
+		Project:          &project,
+	}, nil
 }
 
 func (s *Service) GetAllActiveListings(ctx context.Context) ([]domain.Listing, error) {
@@ -234,6 +286,9 @@ func (s *Service) EditListing(ctx context.Context, in EditListingInput) (*domain
 
 			if delta > 0 && available < delta {
 				return nil, errors.New("Insufficient credits to increase listing")
+			}
+			if delta < 0 && -delta > currentQty {
+				return nil, errors.New("Cannot reduce listing below already sold amount")
 			}
 
 			newLocked := locked + delta

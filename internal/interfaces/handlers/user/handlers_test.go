@@ -46,11 +46,11 @@ func setSessionUser(c *fiber.Ctx, userID, role string, orgID *string) {
 	})
 }
 
-// Test CreateUser requires auth (401 without session).
-func TestCreateUser_RequiresAuth(t *testing.T) {
+// Test CreateUser is public (no auth required; registration).
+func TestCreateUser_Public(t *testing.T) {
 	h, _, _, _ := setupUserTest(t)
 	app := fiber.New()
-	app.Use(middleware.RequireAuth())
+	// create-user is not behind RequireAuth (same as Express)
 	app.Post("/create-user", h.CreateUser)
 
 	body, _ := json.Marshal(map[string]string{
@@ -60,7 +60,8 @@ func TestCreateUser_RequiresAuth(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	require.NoError(t, err)
-	assert.Equal(t, fiber.StatusUnauthorized, resp.StatusCode)
+	// Should succeed (201) or validation error (400), not 401
+	assert.NotEqual(t, fiber.StatusUnauthorized, resp.StatusCode, "create-user must be public for registration")
 }
 
 // Test UpdateRole returns 403 for role without ASSIGN_ROLE (e.g. viewer).

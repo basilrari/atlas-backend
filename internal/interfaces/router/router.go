@@ -150,8 +150,9 @@ func CreateApp(cfg *config.Config) (*fiber.App, *gorm.DB, *redis.Client, error) 
 		}
 		us := &usersvc.Service{DB: db, Rdb: rdb, EmailSender: emailSender}
 		uh := &userhandler.Handlers{Service: us, Config: sessionCfg}
+		// create-user is public (registration); same as Express
+		app.Post("/api/v1/users/create-user", uh.CreateUser)
 		ug := app.Group("/api/v1/users", middleware.RequireAuth())
-		ug.Post("/create-user", uh.CreateUser)
 		ug.Put("/update-user", uh.UpdateUser)
 		ug.Get("/view-user", uh.ViewUser)
 		ug.Patch("/update-role", middleware.AuthorizePermission(constants.AssignRole), uh.UpdateRole)

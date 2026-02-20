@@ -28,3 +28,4 @@ vendor/
 
 # Build / temp
 tmp/
+.vercel

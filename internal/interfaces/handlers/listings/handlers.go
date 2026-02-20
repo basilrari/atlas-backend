@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	listsvc "troo-backend/internal/application/listings"
+	"troo-backend/internal/domain"
 	"troo-backend/internal/middleware"
 	"troo-backend/internal/pkg/response"
 
@@ -18,11 +19,11 @@ type Handlers struct {
 	Service *listsvc.Service
 }
 
-// POST /api/v1/listings/create-listing — 201 with { success, message, data }
+// POST /api/v1/listings/create-listing — 201 with { status, message, data }
 func (h *Handlers) CreateListing(c *fiber.Ctx) error {
 	var body map[string]interface{}
 	if err := json.Unmarshal(c.Body(), &body); err != nil {
-		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Invalid request body"})
+		return response.Error(c, "Invalid request body", 400, nil)
 	}
 
 	required := []string{
@@ -32,13 +33,13 @@ func (h *Handlers) CreateListing(c *fiber.Ctx) error {
 	}
 	for _, f := range required {
 		if body[f] == nil || body[f] == "" {
-			return c.Status(400).JSON(fiber.Map{"success": false, "message": fmt.Sprintf("Missing required field: %s", f)})
+			return response.Error(c, fmt.Sprintf("Missing required field: %s", f), 400, nil)
 		}
 	}
 
 	projectID, err := uuid.Parse(asString(body["project_id"]))
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Missing required field: project_id"})
+		return response.Error(c, "Missing required field: project_id", 400, nil)
 	}
 
 	var sellerID *uuid.UUID
@@ -72,19 +73,19 @@ func (h *Handlers) CreateListing(c *fiber.Ctx) error {
 		VintageYear:      asInt(body["vintage_year"]),
 	})
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"success": false, "message": err.Error()})
+		return response.Error(c, err.Error(), 500, nil)
 	}
-
-	return c.Status(201).JSON(fiber.Map{"success": true, "message": "Listing created successfully", "data": listing})
+	return response.SuccessCreated(c, "Listing created successfully", listingToMapNoTimestamps(listing), nil)
 }
 
-// GET /api/v1/listings/get-all-listings — { success, message, data }
+// GET /api/v1/listings/get-all-listings — { status, message, data } (data = list without createdAt/updatedAt)
 func (h *Handlers) GetAllListings(c *fiber.Ctx) error {
 	listings, err := h.Service.GetAllListings(c.Context())
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{"success": false, "message": err.Error()})
+		return response.Error(c, err.Error(), 500, nil)
 	}
-	return c.JSON(fiber.Map{"success": true, "message": "Listings fetched successfully", "data": listings})
+	data := stripListingTimestamps(listings)
+	return response.Success(c, "Listings fetched successfully", data, nil)
 }
 
 // GET /api/v1/listings/get-org-listings — standard res.success/res.error
@@ -93,14 +94,14 @@ func (h *Handlers) GetOrgListings(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, err.Error(), 403, nil)
 	}
-	data, err := h.Service.GetOrgListings(c.Context(), orgID)
+	listings, err := h.Service.GetOrgListings(c.Context(), orgID)
 	if err != nil {
 		if err.Error() == "Organization not associated with user" {
 			return response.Error(c, err.Error(), 403, nil)
 		}
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Organization listings fetched successfully", data, nil)
+	return response.Success(c, "Organization listings fetched successfully", stripListingTimestamps(listings), nil)
 }
 
 // GET /api/v1/listings/get-listing/:listing_id
@@ -133,7 +134,7 @@ func (h *Handlers) GetAllActiveListings(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Active listings fetched", listings, nil)
+	return response.Success(c, "Active listings fetched", stripListingTimestamps(listings), nil)
 }
 
 // GET /api/v1/listings/get-all-closed-listings
@@ -142,7 +143,7 @@ func (h *Handlers) GetAllClosedListings(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Closed listings fetched", listings, nil)
+	return response.Success(c, "Closed listings fetched", stripListingTimestamps(listings), nil)
 }
 
 // GET /api/v1/listings/get-org-active-listings
@@ -155,7 +156,7 @@ func (h *Handlers) GetOrgActiveListings(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Active org listings fetched", listings, nil)
+	return response.Success(c, "Active org listings fetched", stripListingTimestamps(listings), nil)
 }
 
 // GET /api/v1/listings/get-org-closed-listings
@@ -168,7 +169,7 @@ func (h *Handlers) GetOrgClosedListings(c *fiber.Ctx) error {
 	if err != nil {
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Closed org listings fetched", listings, nil)
+	return response.Success(c, "Closed org listings fetched", stripListingTimestamps(listings), nil)
 }
 
 // PUT /api/v1/listings/edit-listing
@@ -201,17 +202,18 @@ func (h *Handlers) EditListing(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		statusMap := map[string]int{
-			"Missing listing_id":                          400,
-			"Invalid listing_id":                          400,
-			"Invalid price":                               400,
-			"Invalid quantity":                             400,
-			"No valid changes provided":                    400,
-			"Listing not found":                            404,
+			"Missing listing_id":                            400,
+			"Invalid listing_id":                            400,
+			"Invalid price":                                 400,
+			"Invalid quantity":                              400,
+			"No valid changes provided":                     400,
+			"Listing not found":                             404,
 			"Unauthorized listing edit":                    403,
-			"Registry listings cannot be edited by User":   403,
+			"Registry listings cannot be edited by User":    403,
 			"Insufficient credits to increase listing":     400,
-			"Holdings not found":                           404,
-			"Org not found":                                404,
+			"Cannot reduce listing below already sold amount": 400,
+			"Holdings not found":                            404,
+			"Org not found":                                 404,
 		}
 		if code, ok := statusMap[err.Error()]; ok {
 			return response.Error(c, err.Error(), code, nil)
@@ -221,7 +223,7 @@ func (h *Handlers) EditListing(c *fiber.Ctx) error {
 		}
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Listing updated successfully", result, nil)
+	return response.Success(c, "Listing updated successfully", listingToMapNoTimestamps(result), nil)
 }
 
 // POST /api/v1/listings/cancel-listing
@@ -255,7 +257,7 @@ func (h *Handlers) CancelListing(c *fiber.Ctx) error {
 		}
 		return response.Error(c, "Internal Server Error", 500, nil)
 	}
-	return response.Success(c, "Listing cancelled successfully", result, nil)
+	return response.Success(c, "Listing cancelled successfully", listingToMapNoTimestamps(result), nil)
 }
 
 // --- helpers ---
@@ -337,4 +339,40 @@ func asInt(v interface{}) int {
 		return i
 	}
 	return 0
+}
+
+// stripListingTimestamps returns a slice of maps with createdAt/updatedAt removed so all list endpoints return the same listing shape.
+func stripListingTimestamps(listings []domain.Listing) []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(listings))
+	for _, l := range listings {
+		out = append(out, listingToMapNoTimestamps(&l))
+	}
+	return out
+}
+
+// listingToMapNoTimestamps returns one listing as a map without createdAt/updatedAt (same shape as list items).
+// Matches Express: credits_available and price_per_credit are strings (DECIMAL serialized as string by Sequelize/pg).
+func listingToMapNoTimestamps(l *domain.Listing) map[string]interface{} {
+	if l == nil {
+		return nil
+	}
+	bs, _ := json.Marshal(l)
+	var m map[string]interface{}
+	if json.Unmarshal(bs, &m) != nil {
+		return nil
+	}
+	delete(m, "createdAt")
+	delete(m, "updatedAt")
+	// Match Express: DECIMAL fields come back as strings in JSON
+	if v, ok := m["credits_available"]; ok {
+		if f, ok := v.(float64); ok {
+			m["credits_available"] = fmt.Sprintf("%.2f", f)
+		}
+	}
+	if v, ok := m["price_per_credit"]; ok {
+		if f, ok := v.(float64); ok {
+			m["price_per_credit"] = fmt.Sprintf("%.2f", f)
+		}
+	}
+	return m
 }

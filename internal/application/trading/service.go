@@ -109,7 +109,7 @@ func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, a
 			LocationCountry:  safeStr(project.CountryCode),
 			Methodology:      "N/A",
 			Category:         "N/A",
-			SdgNumbers:       "[]", // Postgres json column requires valid JSON
+			SdgNumbers:       domain.SDGNumbers("[]"), // Postgres json column requires valid JSON
 		}
 
 		if err := tx.Create(&listing).Error; err != nil {
