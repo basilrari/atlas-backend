@@ -25,6 +25,7 @@ func (Invitation) TableName() string {
 	return "Invitations"
 }
 
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (i *Invitation) BeforeCreate(tx *gorm.DB) error {
 	if i.InviteID == uuid.Nil {
 		i.InviteID = uuid.New()

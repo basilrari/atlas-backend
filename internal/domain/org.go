@@ -24,7 +24,7 @@ func (Org) TableName() string {
 	return "Orgs"
 }
 
-// BeforeCreate ensures org_id is set for DBs without default uuid.
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (o *Org) BeforeCreate(tx *gorm.DB) error {
 	if o.OrgID == uuid.Nil {
 		o.OrgID = uuid.New()

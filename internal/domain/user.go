@@ -25,7 +25,7 @@ func (User) TableName() string {
 	return "Users"
 }
 
-// BeforeCreate sets UUID if not set (for DBs without gen_random_uuid).
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.UserID == uuid.Nil {
 		u.UserID = uuid.New()

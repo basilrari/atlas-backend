@@ -21,6 +21,7 @@ func (ListingEvent) TableName() string {
 	return "ListingEvents"
 }
 
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (le *ListingEvent) BeforeCreate(tx *gorm.DB) error {
 	if le.EventID == uuid.Nil {
 		le.EventID = uuid.New()

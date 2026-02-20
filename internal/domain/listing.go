@@ -93,7 +93,7 @@ func (Listing) TableName() string {
 	return "Listings"
 }
 
-// BeforeCreate sets listing_id if not already set (DBs without default uuid).
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (l *Listing) BeforeCreate(tx *gorm.DB) error {
 	if l.ListingID == uuid.Nil {
 		l.ListingID = uuid.New()

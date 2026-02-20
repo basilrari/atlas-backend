@@ -23,7 +23,7 @@ func (Holding) TableName() string {
 	return "Holdings"
 }
 
-// BeforeCreate sets holding_id if not set so we never insert the zero UUID (avoids Holdings_pkey duplicate).
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (h *Holding) BeforeCreate(tx *gorm.DB) error {
 	if h.HoldingID == uuid.Nil {
 		h.HoldingID = uuid.New()

@@ -26,6 +26,7 @@ func (RetirementCertificate) TableName() string {
 	return "RetirementCertificates"
 }
 
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (r *RetirementCertificate) BeforeCreate(tx *gorm.DB) error {
 	if r.CertificateID == uuid.Nil {
 		r.CertificateID = uuid.New()

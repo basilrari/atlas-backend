@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 // IcrProject matches Express icrProjects model (icrProjects.js).
@@ -41,4 +42,12 @@ type IcrProject struct {
 
 func (IcrProject) TableName() string {
 	return "icrProjects"
+}
+
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
+func (p *IcrProject) BeforeCreate(tx *gorm.DB) error {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
+	}
+	return nil
 }

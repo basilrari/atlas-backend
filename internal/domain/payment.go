@@ -28,6 +28,7 @@ func (Payment) TableName() string {
 	return "Payments"
 }
 
+// BeforeCreate: never insert zero UUID for primary key; generate random when not set.
 func (p *Payment) BeforeCreate(tx *gorm.DB) error {
 	if p.ID == uuid.Nil {
 		p.ID = uuid.New()
