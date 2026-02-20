@@ -149,38 +149,41 @@ func buyCreditsInTransaction(tx *gorm.DB, listingID, buyerOrgID uuid.UUID, amoun
 		return err
 	}
 
-	// Listing events (PARTIALLY_FILLED or FILLED, then CLOSED if fully filled) — match Express buyCreditsService
-	var buyerOrg domain.Org
-	if err := tx.Where("org_id = ?", buyerOrgID).Select("org_code").First(&buyerOrg).Error; err != nil {
-		return errors.New("Buyer org not found")
-	}
-	remainingCredits := listing.CreditsAvailable
-	eventType := "FILLED"
-	if remainingCredits > 0 {
-		eventType = "PARTIALLY_FILLED"
-	}
-	fillEventData, _ := json.Marshal(map[string]interface{}{
-		"bought_quantity":    amount,
-		"remaining_quantity": remainingCredits,
-		"price_per_credit":   listing.PricePerCredit,
-	})
-	if err := tx.Create(&domain.ListingEvent{
-		ListingID:    listing.ListingID,
-		EventType:    eventType,
-		ActorOrgCode: &buyerOrg.OrgCode,
-		EventData:    datatypes.JSON(fillEventData),
-	}).Error; err != nil {
-		return err
-	}
-	if remainingCredits == 0 {
-		closedEventData, _ := json.Marshal(map[string]interface{}{"reason": "fully_filled"})
+	// Listing events (PARTIALLY_FILLED or FILLED, then CLOSED) only when listing has a seller (org-owned).
+	// Registry-origin listings (seller_id null) must not get these events so they don't show under "partially sold".
+	if listing.SellerID != nil {
+		var buyerOrg domain.Org
+		if err := tx.Where("org_id = ?", buyerOrgID).Select("org_code").First(&buyerOrg).Error; err != nil {
+			return errors.New("Buyer org not found")
+		}
+		remainingCredits := listing.CreditsAvailable
+		eventType := "FILLED"
+		if remainingCredits > 0 {
+			eventType = "PARTIALLY_FILLED"
+		}
+		fillEventData, _ := json.Marshal(map[string]interface{}{
+			"bought_quantity":    amount,
+			"remaining_quantity": remainingCredits,
+			"price_per_credit":   listing.PricePerCredit,
+		})
 		if err := tx.Create(&domain.ListingEvent{
 			ListingID:    listing.ListingID,
-			EventType:    "CLOSED",
-			ActorOrgCode: nil,
-			EventData:    datatypes.JSON(closedEventData),
+			EventType:    eventType,
+			ActorOrgCode: &buyerOrg.OrgCode,
+			EventData:    datatypes.JSON(fillEventData),
 		}).Error; err != nil {
 			return err
+		}
+		if remainingCredits == 0 {
+			closedEventData, _ := json.Marshal(map[string]interface{}{"reason": "fully_filled"})
+			if err := tx.Create(&domain.ListingEvent{
+				ListingID:    listing.ListingID,
+				EventType:    "CLOSED",
+				ActorOrgCode: nil,
+				EventData:    datatypes.JSON(closedEventData),
+			}).Error; err != nil {
+				return err
+			}
 		}
 	}
 

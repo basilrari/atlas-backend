@@ -20,6 +20,8 @@ type Service struct {
 }
 
 // SellCredits mirrors Express sellCreditsService (transactional).
+// When a person sells credits we never create a new holding: we only edit their existing holding
+// and set the amount they list under locked_for_sale (same as Express).
 func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, amount, price float64) (map[string]interface{}, error) {
 	var result map[string]interface{}
 
@@ -32,6 +34,7 @@ func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, a
 			return err
 		}
 
+		// Must find existing holding only — never create a new one when selling (match Express).
 		var holding domain.Holding
 		if err := tx.Where("org_id = ? AND project_id = ?", orgID, projectID).First(&holding).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
@@ -61,6 +64,7 @@ func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, a
 			if err := tx.Save(&existingListing).Error; err != nil {
 				return err
 			}
+			// Edit existing holding only: add listed amount to locked_for_sale (no new holding).
 			holding.LockedForSale = math.Round((holding.LockedForSale+amount)*100) / 100
 			if err := tx.Save(&holding).Error; err != nil {
 				return err
@@ -85,6 +89,7 @@ func (s *Service) SellCredits(ctx context.Context, orgID, projectID uuid.UUID, a
 			return nil
 		}
 
+		// Edit existing holding only: add listed amount to locked_for_sale, then create new Listing (no new holding).
 		holding.LockedForSale = math.Round((holding.LockedForSale+amount)*100) / 100
 		if err := tx.Save(&holding).Error; err != nil {
 			return err
