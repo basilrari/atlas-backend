@@ -71,9 +71,9 @@ func (wh *WebhookHandler) HandleWebhook(c *fiber.Ctx) error {
 		}
 
 		if err := wh.handlePaymentIntentSucceeded(pi, event.ID, rawBody); err != nil {
-			// Express always returns 200 for domain errors too (to avoid Stripe retries)
+			// Return 200 with error in body so Stripe won't retry, but dashboard shows the error
 			log.Warn().Err(err).Str("payment_intent", pi.ID).Msg("Stripe webhook payment_intent.succeeded processing failed (credits not transferred)")
-			return c.Status(200).SendString("ok")
+			return c.Status(200).JSON(fiber.Map{"ok": false, "error": err.Error()})
 		}
 	}
 
