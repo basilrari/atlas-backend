@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"troo-backend/app"
+	"troo-backend/bootstrap"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/adaptor"
@@ -13,7 +13,7 @@ var fiberApp *fiber.App
 
 func init() {
 	var err error
-	fiberApp, err = app.New()
+	fiberApp, err = bootstrap.New()
 	if err != nil {
 		panic("app create: " + err.Error())
 	}
