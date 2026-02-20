@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Holding matches Express Holdings model (holdingsModel.js).
@@ -20,4 +21,12 @@ type Holding struct {
 
 func (Holding) TableName() string {
 	return "Holdings"
+}
+
+// BeforeCreate sets holding_id if not set so we never insert the zero UUID (avoids Holdings_pkey duplicate).
+func (h *Holding) BeforeCreate(tx *gorm.DB) error {
+	if h.HoldingID == uuid.Nil {
+		h.HoldingID = uuid.New()
+	}
+	return nil
 }
