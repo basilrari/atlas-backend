@@ -14,7 +14,7 @@ type Config struct {
 	SessionSecret      string
 	DatabaseURL        string
 	RedisURL           string
-	SupabaseURL        string
+	SupabaseURL        string // e.g. https://xwsiuytkbefejvoqpjyg.supabase.co — used for storage sign URLs and public URLs
 	SupabaseSecretKey  string // must be service_role key (Dashboard → API), not anon key
 	StripeSecretKey    string
 	StripeWebhookSecret string
@@ -86,3 +86,4 @@ func inviteBaseURL(s string) string {
 	}
 	return s
 }
+

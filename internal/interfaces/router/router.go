@@ -106,8 +106,6 @@ func CreateApp(cfg *config.Config) (*fiber.App, *gorm.DB, *redis.Client, error) 
 	app.Get("/reset", hh.Reset)
 	app.Get("/health/json", hh.JSON)
 	app.Get("/health/errors", hh.Errors)
-	app.Get("/health/sessions", hh.Sessions)
-	app.Post("/health/sessions/clear", hh.ClearSessions)
 
 	var db *gorm.DB
 	if cfg.DatabaseURL != "" {
@@ -168,7 +166,7 @@ func CreateApp(cfg *config.Config) (*fiber.App, *gorm.DB, *redis.Client, error) 
 		og.Get("/view-org", oh.ViewOrg)
 		og.Patch("/update-org", oh.UpdateOrg)
 
-		// Uploads
+		// Uploads — sign URL uses SUPABASE_URL (e.g. https://xwsiuytkbefejvoqpjyg.supabase.co/storage/v1/...)
 		sc := &uploadsvc.HTTPClient{BaseURL: cfg.SupabaseURL, SecretKey: cfg.SupabaseSecretKey}
 		upsvc := &uploadsvc.Service{Client: sc, SupabaseURL: cfg.SupabaseURL}
 		uph := &uploadhandler.Handlers{Service: upsvc}

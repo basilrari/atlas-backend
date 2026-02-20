@@ -10,7 +10,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"github.com/rs/zerolog/log"
 )
 
 const userSessionsPrefix = "user_sessions:"
@@ -90,38 +89,12 @@ func (h *Handlers) Login(c *fiber.Ctx) error {
 
 // Me GET /api/v1/auth/me — return current session user in standard success format.
 func (h *Handlers) Me(c *fiber.Ctx) error {
-	sessionID := middleware.GetSessionID(c)
 	sessionUser := middleware.GetUser(c)
-
-	// Debug logging for auth/me (check server logs to see why 401)
-	if sessionID == "" {
-		cookieVal := c.Cookies(middleware.SessionCookieName)
-		log.Info().Str("path", "/auth/me").
-			Bool("cookie_present", cookieVal != "").
-			Int("cookie_len", len(cookieVal)).
-			Msg("auth/me: no session id — missing cookie or invalid format")
-	} else if sessionUser == nil {
-		log.Info().Str("path", "/auth/me").Str("session_id_prefix", truncate(sessionID, 8)).
-			Msg("auth/me: session id present but no user in session data (Redis key may be missing or empty)")
-	}
-
 	user, err := authsvc.VerifyUser(sessionUser)
 	if err != nil {
-		log.Info().Str("path", "/auth/me").Err(err).
-			Bool("session_user_nil", sessionUser == nil).
-			Msg("auth/me: returning 401 Not authenticated")
 		return response.Error(c, "Not authenticated", fiber.StatusUnauthorized, nil)
 	}
-	log.Info().Str("path", "/auth/me").Str("user_id", user.UserID).
-		Msg("auth/me: success")
 	return response.Success(c, "Authenticated", fiber.Map{"user": user}, nil)
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "..."
 }
 
 // Logout DELETE /api/v1/auth/logout — SRem user_sessions:user_id, Del session key, clear cookie, return success.

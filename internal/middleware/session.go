@@ -21,7 +21,7 @@ type SessionConfig struct {
 
 const (
 	sessionCookieName  = "troo.sid"
-	SessionCookieName  = "troo.sid" // exported for auth/me debug logging
+	SessionCookieName  = "troo.sid" // exported for auth logout (clear cookie)
 	sessionPrefix      = "session:"
 	SessionRedisPrefix = "session:" // exported for auth logout (Del key)
 	sessionMaxAge      = 24 * time.Hour

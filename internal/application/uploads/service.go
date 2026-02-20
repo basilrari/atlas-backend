@@ -17,6 +17,7 @@ type SupabaseClient interface {
 }
 
 // HTTPClient is a SupabaseClient backed by the HTTP API.
+// BaseURL should be SUPABASE_URL (e.g. https://xwsiuytkbefejvoqpjyg.supabase.co) so sign and public URLs use the same origin (CORS).
 type HTTPClient struct {
 	BaseURL   string
 	SecretKey string
@@ -34,26 +35,27 @@ func (c *HTTPClient) CreateSignedUploadURL(ctx context.Context, bucket, path str
 	if c.Client == nil {
 		c.Client = &http.Client{Timeout: 10 * time.Second}
 	}
-	if c.BaseURL == "" {
+	base := strings.TrimRight(c.BaseURL, "/")
+	if base == "" {
 		return "", fmt.Errorf("supabase: SUPABASE_URL is not set")
 	}
 	if c.SecretKey == "" {
 		return "", fmt.Errorf("supabase: SUPABASE_SECRET_KEY is not set")
 	}
-	base := strings.TrimRight(c.BaseURL, "/")
-	// Signed upload URL: try upload/sign first (upload); fallback to object/sign if needed
+	// Sign URL: https://{project}.supabase.co/storage/v1/object/upload/sign/{bucket}/{path}
 	url := fmt.Sprintf("%s/storage/v1/object/upload/sign/%s/%s", base, bucket, path)
 
-	bodyBytes, _ := json.Marshal(map[string]interface{}{
-		"expiresIn": 3600, // 1 hour; Express uses supabase-js default
-		"upsert":    false,
-	})
+	reqBody := map[string]interface{}{
+		"path":   path,
+		"upsert": false,
+	}
+	bodyBytes, _ := json.Marshal(reqBody)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return "", err
 	}
-	// Match @supabase/supabase-js: both apikey and Authorization Bearer (same key)
+	// Same as Express/supabase-js: apikey + Bearer (same key = service_role)
 	req.Header.Set("apikey", c.SecretKey)
 	req.Header.Set("Authorization", "Bearer "+c.SecretKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -67,7 +69,6 @@ func (c *HTTPClient) CreateSignedUploadURL(ctx context.Context, bucket, path str
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyStr := string(respBody)
-		// 403 Unauthorized / Invalid Compact JWS = wrong API key (anon key sent as Bearer; need service_role)
 		if resp.StatusCode == 400 || resp.StatusCode == 403 {
 			if strings.Contains(bodyStr, "Invalid Compact JWS") || strings.Contains(bodyStr, "Unauthorized") {
 				return "", fmt.Errorf("supabase storage requires the service_role key (secret), not the anon key: set SUPABASE_SECRET_KEY to your project's service_role key from Supabase Dashboard → Project Settings → API (raw body: %s)", bodyStr)
@@ -80,22 +81,30 @@ func (c *HTTPClient) CreateSignedUploadURL(ctx context.Context, bucket, path str
 	if err := json.Unmarshal(respBody, &data); err != nil {
 		return "", fmt.Errorf("supabase response decode: %w", err)
 	}
-	// API can return signedUrl, signed_url, or url (relative)
+
+	var signedURL string
 	if data.SignedURL != "" {
-		return data.SignedURL, nil
+		signedURL = data.SignedURL
+	} else if data.SignedURLSnake != "" {
+		signedURL = data.SignedURLSnake
+	} else if data.URL != "" {
+		signedURL = data.URL
+	} else {
+		return "", fmt.Errorf("supabase returned no signed URL, body: %s", string(respBody))
 	}
-	if data.SignedURLSnake != "" {
-		return data.SignedURLSnake, nil
-	}
-	if data.URL != "" {
-		// Relative URL (e.g. /storage/v1/object/...?token=...) — build full URL
-		u := data.URL
-		if len(u) > 0 && u[0] != '/' {
-			u = "/" + u
+
+	// Fix: Supabase returns relative "/object/upload/sign/..." → we must insert /storage/v1/
+	if !strings.HasPrefix(signedURL, "http") {
+		if strings.HasPrefix(signedURL, "/object/") {
+			signedURL = base + "/storage/v1" + signedURL
+		} else if strings.HasPrefix(signedURL, "/storage/") {
+			signedURL = base + signedURL
+		} else {
+			signedURL = base + "/storage/v1" + signedURL
 		}
-		return base + u, nil
 	}
-	return "", fmt.Errorf("supabase returned no signed URL, body: %s", string(respBody))
+
+	return signedURL, nil
 }
 
 // Service encapsulates upload logic.
