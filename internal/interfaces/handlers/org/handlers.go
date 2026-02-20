@@ -85,6 +85,7 @@ func (h *Handlers) CreateOrg(c *fiber.Ctx) error {
 		OrgID:    &orgIDStr,
 	})
 
+	// Cookie: troo.sid (Express: same as login, no domain when setting)
 	cookie := middleware.SessionCookieConfig(h.Config)
 	cookie.Value = "s:" + sessionID
 	c.Cookie(&cookie)

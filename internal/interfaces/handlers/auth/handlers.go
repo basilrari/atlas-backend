@@ -70,13 +70,9 @@ func (h *Handlers) Login(c *fiber.Ctx) error {
 		return response.Error(c, "Internal Server Error", fiber.StatusInternalServerError, nil)
 	}
 
-	// Set cookie so client gets troo.sid = "s:"+sessionID (Express compatibility)
+	// Set cookie so client gets troo.sid = "s:"+sessionID (Express: no domain when setting)
 	cookie := middleware.SessionCookieConfig(h.Config)
 	cookie.Value = "s:" + sessionID
-	cookie.Expires = cookie.Expires // use default from config
-	if h.Config.IsProduction && !h.Config.AllowCrossSiteDev {
-		cookie.Domain = ".troo.earth"
-	}
 	c.Cookie(&cookie)
 
 	// Response: standard success with user object (no password)

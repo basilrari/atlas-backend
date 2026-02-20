@@ -62,7 +62,7 @@ func (h *Handlers) CreateUser(c *fiber.Ctx) error {
 		_ = h.Service.Rdb.SAdd(c.Context(), userSessionsPrefix+u.UserID.String(), sid).Err()
 	}
 
-	// Cookie (same as login)
+	// Cookie: troo.sid = "s:"+sid (Express: same as login, no domain when setting)
 	cookie := middleware.SessionCookieConfig(h.Config)
 	cookie.Value = "s:" + sid
 	c.Cookie(&cookie)
