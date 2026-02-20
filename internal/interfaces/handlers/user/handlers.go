@@ -67,7 +67,8 @@ func (h *Handlers) CreateUser(c *fiber.Ctx) error {
 	cookie.Value = "s:" + sid
 	c.Cookie(&cookie)
 
-	return response.SuccessCreated(c, "User created successfully", fiber.Map{"user": safe}, nil)
+	// Return user as data directly so frontend extractRegisterAuthObject(response.data?.data) gets fullname etc. on first load (onboarding shows name instead of "USER").
+	return response.SuccessCreated(c, "User created successfully", safe, nil)
 }
 
 // UpdateUser PUT /api/v1/users/update-user — updates the session user (user_id from session).

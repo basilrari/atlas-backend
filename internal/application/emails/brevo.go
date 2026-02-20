@@ -80,7 +80,7 @@ func (c *BrevoClient) send(ctx context.Context, toEmail, subject, html string) e
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	if c.Client == nil {
-		c.Client = &http.Client{Timeout: 15 * time.Second}
+		c.Client = &http.Client{Timeout: 30 * time.Second}
 	}
 	resp, err := c.Client.Do(req)
 	if err != nil {
