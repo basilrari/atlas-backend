@@ -70,7 +70,7 @@ func Load() (*Config, error) {
 		StripeWebhookSecret: viper.GetString("STRIPE_WEBHOOK_SECRET"),
 		FrontendURLEndsWith: viper.GetString("FRONTEND_URL_ENDS_WITH"),
 		DevPassword:         viper.GetString("DEV_PASSWORD"),
-		AllowCrossSiteDev:   viper.GetString("ALLOW_CROSS_SITE_DEV") == "true",
+		AllowCrossSiteDev:   strings.EqualFold(viper.GetString("ALLOW_CROSS_SITE_DEV"), "true"),
 		HealthAdminKey:       viper.GetString("HEALTH_ADMIN_KEY"),
 		ICRAPIKey:            viper.GetString("ICR_API_KEY"),
 		SendinblueAPIKey:     viper.GetString("SENDINBLUE_API_KEY"),

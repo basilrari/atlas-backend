@@ -106,6 +106,8 @@ func CreateApp(cfg *config.Config) (*fiber.App, *gorm.DB, *redis.Client, error) 
 	app.Get("/reset", hh.Reset)
 	app.Get("/health/json", hh.JSON)
 	app.Get("/health/errors", hh.Errors)
+	app.Get("/health/sessions", hh.Sessions)
+	app.Post("/health/sessions/clear", hh.ClearSessions)
 
 	var db *gorm.DB
 	if cfg.DatabaseURL != "" {

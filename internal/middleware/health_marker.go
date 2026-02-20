@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,8 +48,20 @@ func HealthMarker(rdb *redis.Client) fiber.Handler {
 		ms := time.Since(start).Milliseconds()
 		_, _ = rdb.Incr(ctx, KeyResCount).Result()
 		_, _ = rdb.IncrByFloat(ctx, KeyResTime, float64(ms)).Result()
-		if c.Response().StatusCode() >= 500 {
+		status := c.Response().StatusCode()
+		if status >= 500 {
 			_, _ = rdb.Incr(ctx, KeyReqErrors).Result()
+			// Push to error log for health dashboard (same as Express: LPUSH + LTRIM 0 49)
+			entry := map[string]interface{}{
+				"time":    time.Now().Format(time.RFC3339),
+				"path":    c.Path(),
+				"method":  c.Method(),
+				"message": "Status " + strconv.Itoa(status),
+			}
+			if b, e := json.Marshal(entry); e == nil {
+				rdb.LPush(ctx, KeyErrorLog, b)
+				rdb.LTrim(ctx, KeyErrorLog, 0, 49)
+			}
 		}
 		return err
 	}
